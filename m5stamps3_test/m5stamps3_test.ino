@@ -15,16 +15,10 @@ CRGB leds[NUM_LEDS];                        // LED配列
 
 // LEDの色を設定する関数
 void setLedColor(int value) {
-    if (value >= 0 && value < 200) {
-        leds[0] = CRGB::Blue; // 青色 (0-199)
-    } else if (value >= 200 && value < 400) {
-        leds[0] = CRGB::Green; // 緑色 (200-399)
-    } else if (value >= 400 && value < 600) {
-        leds[0] = CRGB::Yellow; // 黄色 (400-599)
-    } else if (value >= 600 && value < 800) {
-        leds[0] = CRGB::Orange; // オレンジ色 (600-799)
-    } else if (value >= 800) {
-        leds[0] = CRGB::Red; // 赤色 (800以上)
+    if (value == 0) {
+        leds[0] = CRGB::Black; // 消灯
+    } else if (value >= 1) {
+        leds[0] = CRGB::Red;   // 赤色に点灯
     }
     FastLED.show();  // LEDに色を反映
 }
@@ -70,7 +64,9 @@ void loop() {
 
         // 受信したデータを数値に変換
         receivedNumber = atoi(packetBuffer); // 受信データを整数値に変換
-        Serial.printf("Received Number: %4d\n", receivedNumber);  // 現在の受信数値をシリアルモニタに表示
+
+        // 受信した時刻を表示
+        Serial.printf("Received Number: %4d at Time: %lu ms\n", receivedNumber, millis());
 
         // 受信した数値に応じてLEDの色を設定
         setLedColor(receivedNumber);
