@@ -7,6 +7,7 @@ const int encoderPinB = 13; // エンコーダのC2ピン
 volatile int encoderCount = 0; // エンコーダのカウント
 unsigned long prevTime = 0;    // 前回の時間
 float rpm = 0.0;               // 回転数
+char command = 's';            // 初期コマンド（停止）
 
 // 割り込みハンドラ
 void IRAM_ATTR encoderISR() {
@@ -31,12 +32,26 @@ void setup() {
   attachInterrupt(digitalPinToInterrupt(encoderPinA), encoderISR, CHANGE);
 
   Serial.begin(115200);
+  Serial.println("Enter 'f' for forward, 'r' for reverse, 's' to stop:");
 }
 
 void loop() {
-  // モーターを回転させる
-  digitalWrite(motorPinA, HIGH);
-  digitalWrite(motorPinB, LOW);
+  // PCからのコマンドを読み取る
+  if (Serial.available() > 0) {
+    command = Serial.read();
+  }
+
+  // コマンドに応じてモーターの回転方向を設定
+  if (command == 'f') {        // 正転
+    digitalWrite(motorPinA, HIGH);
+    digitalWrite(motorPinB, LOW);
+  } else if (command == 'r') { // 逆転
+    digitalWrite(motorPinA, LOW);
+    digitalWrite(motorPinB, HIGH);
+  } else if (command == 's') { // 停止
+    digitalWrite(motorPinA, LOW);
+    digitalWrite(motorPinB, LOW);
+  }
 
   // 回転数計算
   unsigned long currentTime = millis();
