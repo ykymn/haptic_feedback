@@ -104,8 +104,8 @@ void handleCommand(String command) {
     motorForward(speed);
     Serial.println("Moving Forward at speed: " + String(speed));
   } else if (speed < 0) {
-    motorBackward(speed);
-    Serial.println("Moving Backward at speed: " + String(speed));
+    motorBackward(abs(speed));
+    Serial.println("Moving Backward at speed: " + String(abs(speed)));
   } else if (speed == 0) {
     motorStop();
     return;
