@@ -96,32 +96,18 @@ void handleCommand(String command) {
     return;
   }
 
-  char direction = command[0];  // 最初の文字が方向
-
-  if (direction == 's') {
-    motorStop();
-    return;
-  }
-
-  if (command.length() < 2) {
-    Serial.println("Invalid command. Use format: f/r speed (e.g., f128)");
-    return;
-  }
-
-  int speed = command.substring(1).toInt();  // 残りが速度
-
-  if (speed < 0 || speed > 255) {
-    Serial.println("Speed must be between 0 and 255.");
-    return;
-  }
-
-  if (direction == 'f') {
+  int speed =  command.toInt();
+  
+  if (abs(speed) > 255) {
+    Serial.println("Speed must be between -255 and 255.");
+  } else if (speed > 0) {
     motorForward(speed);
     Serial.println("Moving Forward at speed: " + String(speed));
-  } else if (direction == 'r') {
+  } else if (speed < 0) {
     motorBackward(speed);
     Serial.println("Moving Backward at speed: " + String(speed));
-  } else {
-    Serial.println("Invalid direction. Use 'f' for forward, 'r' for backward, or 's' to stop.");
+  } else if (speed == 0) {
+    motorStop();
+    return;
   }
 }
