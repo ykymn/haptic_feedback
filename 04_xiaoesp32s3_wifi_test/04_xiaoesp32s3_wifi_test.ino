@@ -77,6 +77,8 @@ void loop() {
     packetBuffer[packetSize] = '\0';
     receivedNumber = atoi(packetBuffer);
     Serial.printf("Received Number: %d\n", receivedNumber);
+    Serial.print("IP Address: ");
+    Serial.println(WiFi.localIP());
     handleCommand(receivedNumber);
   }
 
