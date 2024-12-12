@@ -48,10 +48,6 @@ void setup() {
   ledcSetup(pwmChannelB, pwmFreq, pwmResolution);
   ledcAttachPin(motorPinB, pwmChannelB);
 
-  // エンコーダピンの設定
-  pinMode(encoderPinA, INPUT_PULLUP);
-  pinMode(encoderPinB, INPUT_PULLUP);
-  
   // エンコーダの割り込み設定
   attachInterrupt(digitalPinToInterrupt(encoderPinA), encoderISR, CHANGE);
 
@@ -75,7 +71,6 @@ void setup() {
 }
 
 void loop() {
-
   // UDPパケットの受信処理
   int packetSize = udp.parsePacket(); // 受信したパケットのサイズを取得
   if (packetSize) {  // パケットが受信された場合のみ処理を実行
@@ -88,27 +83,27 @@ void loop() {
   }
 
   // エンコーダ情報を表示
-  rpm = motorSpeed (encoderCount);
-  Serial.printf("RPM: %d / IP Address: %s\n", rpm, WiFi.localIP().toString().c_str());
+  rpm = calculateRPM();
+  Serial.printf("RPM: %.2f / IP Address: %s\n", rpm, WiFi.localIP().toString().c_str());
   delay(500);
 }
 
 // モーター制御関数
 void motorForward(int pwmValue) {
   pwmValue = constrain(pwmValue, 0, 255); // PWM値を制限
-  analogWrite(motorPinA, pwmValue);
-  analogWrite(motorPinB, 0);
+  ledcWrite(pwmChannelA, pwmValue);
+  ledcWrite(pwmChannelB, 0);
 }
 
 void motorBackward(int pwmValue) {
   pwmValue = constrain(pwmValue, 0, 255); // PWM値を制限
-  analogWrite(motorPinA, 0);
-  analogWrite(motorPinB, pwmValue);
+  ledcWrite(pwmChannelA, 0);
+  ledcWrite(pwmChannelB, pwmValue);
 }
 
 void motorStop() {
-  analogWrite(motorPinA, 0);
-  analogWrite(motorPinB, 0);
+  ledcWrite(pwmChannelA, 0);
+  ledcWrite(pwmChannelB, 0);
   Serial.println("Motor stopped");
 }
 
@@ -130,12 +125,14 @@ void handleCommand(int receivedNumber) {
   }
 }
 
-//エンコーダカウント処理
-void motorSpeed (encoderCount) {
+// 回転数計算
+float calculateRPM() {
   unsigned long currentTime = millis();
+  float calculatedRPM = 0.0;
   if (currentTime - prevTime >= 1000) { // 1秒ごとに回転数を計算
-    rpm = (encoderCount / 360) * 60.0; // 1秒ごとにRPMを計算
+    calculatedRPM = (encoderCount / (float)pulsesPerRevolution) * 60.0;
     encoderCount = 0;
     prevTime = currentTime;
-  return rpm; 
+  }
+  return calculatedRPM;
 }
