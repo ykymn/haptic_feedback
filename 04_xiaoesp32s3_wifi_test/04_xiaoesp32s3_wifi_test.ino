@@ -1,8 +1,12 @@
 #include <WiFi.h> // Wi-Fiライブラリ
+#include <WiFiUdp.h>    // UDP通信を行うためのライブラリ
 
 // Wi-Fi情報
 const char* ssid = "Living-Lab_2.4";
 const char* password = "livinglab";
+const int localPort = 8888;   // UDPサーバーがリッスンするポート番号
+int receivedNumber = 0;                     // UDPで受信した数値を保持する変数
+WiFiUDP udp;                                // UDP通信を扱うオブジェクト
 
 // モータードライバピン
 const int motorPinA = 4;  // ドライバの入力Aピン（PWM）
@@ -33,6 +37,10 @@ void setup() {
   Serial.print("IP Address: ");
   Serial.println(WiFi.localIP());
 
+  // UDPサーバーを開始
+  udp.begin(localPort);
+  Serial.println("UDP Server started");
+
   // モーターピンを初期化
   pinMode(motorPinA, OUTPUT);
   pinMode(motorPinB, OUTPUT);
@@ -49,10 +57,25 @@ void setup() {
 
 void loop() {
   // シリアルモニタからのコマンド入力を処理
-  if (Serial.available()) {
-    String command = Serial.readStringUntil('\n');
-    handleCommand(command);
-  }
+  // if (Serial.available()) {
+  //   String command = Serial.readStringUntil('\n');
+  //   handleCommand(command);
+  // }
+
+  // UDPパケットの受信処理
+  int packetSize = udp.parsePacket(); // 受信したパケットのサイズを取得
+  if (packetSize) {  // パケットが受信された場合のみ処理を実行
+      char packetBuffer[255];  // 受信データを保持するバッファ
+      udp.read(packetBuffer, packetSize); // パケットを読み込む
+      packetBuffer[packetSize] = '\0';  // 文字列の終端を追加
+
+      // 受信したデータを数値に変換
+      receivedNumber = atoi(packetBuffer); // 受信データを整数値に変換
+
+      // 受信した時刻を表示
+      Serial.printf("Received Number: %4d at Time: %lu ms\n", receivedNumber, millis());
+
+      handleCommand(receivedNumber);
 
   // エンコーダのカウントを表示
   Serial.print("Encoder Count: ");
@@ -87,26 +110,26 @@ void encoderISR() {
 }
 
 // シリアルコマンドを処理
-void handleCommand(String command) {
+void handleCommand(int receivedNumber) {
   // コマンドをパース
-  command.trim();  // 余計な空白を削除
+  // command.trim();  // 余計な空白を削除
 
-  if (command.length() == 0) {
-    Serial.println("Invalid command. Use format: f/r speed or s to stop");
-    return;
-  }
+  // if (command.length() == 0) {
+  //   Serial.println("Invalid command. Use format: f/r speed or s to stop");
+  //   return;
+  // }
 
-  int speed =  command.toInt();
+  // int speed =  command.toInt();
   
-  if (abs(speed) > 255) {
+  if (abs(receivedNumber) > 255) {
     Serial.println("Speed must be between -255 and 255.");
-  } else if (speed > 0) {
-    motorForward(speed);
-    Serial.println("Moving Forward at speed: " + String(speed));
-  } else if (speed < 0) {
-    motorBackward(abs(speed));
-    Serial.println("Moving Backward at speed: " + String(abs(speed)));
-  } else if (speed == 0) {
+  } else if (receivedNumber > 0) {
+    motorForward(receivedNumber);
+    Serial.println("Moving Forward at speed: " + String(receivedNumber));
+  } else if (receivedNumber < 0) {
+    motorBackward(abs(receivedNumber));
+    Serial.println("Moving Backward at speed: " + String(abs(receivedNumber)));
+  } else if (receivedNumber == 0) {
     motorStop();
     return;
   }
