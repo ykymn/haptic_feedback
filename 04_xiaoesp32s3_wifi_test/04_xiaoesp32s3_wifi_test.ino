@@ -13,13 +13,48 @@ const int motorPinB = 3;    // ドライバの入力Bピン（PWM）
 const int encoderPinA = 2;  // エンコーダピンA
 const int encoderPinB = 1;  // エンコーダピンB
 
-// エンコーダカウント
-volatile int encoderCount = 0;
+volatile int encoderCount = 0;      // エンコーダカウント
+unsigned long prevTime = 0;         // 前回の時間
+float rpm = 0.0;                    // 回転数
+const int pulsesPerRevolution = 20; // エンコーダの1回転あたりのパルス数に合わせて調整
+int receivedNumber = 0;             // 受信データの初期値
 
-// 受信データ用
-int receivedNumber = 0;
+// PWM設定
+const int pwmChannelA = 0;     // チャンネル0にmotorPinAを割り当て
+const int pwmChannelB = 1;     // チャンネル1にmotorPinBを割り当て
+const int pwmFreq = 1000;      // PWM周波数
+const int pwmResolution = 8;   // PWM解像度（0～255の範囲）
+
+// 割り込みハンドラ
+void IRAM_ATTR encoderISR() {
+  int state = digitalRead(encoderPinA);
+  if (digitalRead(encoderPinB) == state) {
+    encoderCount++;
+  } else {
+    encoderCount--;
+  }
+}
 
 void setup() {
+  // モーターピンの設定
+  pinMode(motorPinA, OUTPUT);
+  pinMode(motorPinB, OUTPUT);
+  pinMode(encoderPinA, INPUT_PULLUP);
+  pinMode(encoderPinB, INPUT_PULLUP);
+
+  // PWM設定
+  ledcSetup(pwmChannelA, pwmFreq, pwmResolution);
+  ledcAttachPin(motorPinA, pwmChannelA);
+  ledcSetup(pwmChannelB, pwmFreq, pwmResolution);
+  ledcAttachPin(motorPinB, pwmChannelB);
+
+  // エンコーダピンの設定
+  pinMode(encoderPinA, INPUT_PULLUP);
+  pinMode(encoderPinB, INPUT_PULLUP);
+  
+  // エンコーダの割り込み設定
+  attachInterrupt(digitalPinToInterrupt(encoderPinA), encoderISR, CHANGE);
+
   Serial.begin(115200);
   delay(1000);
 
@@ -37,34 +72,24 @@ void setup() {
   // UDPサーバー開始
   udp.begin(localPort);
   Serial.println("UDP Server started");
-
-  // ピン初期化
-  pinMode(motorPinA, OUTPUT);
-  pinMode(motorPinB, OUTPUT);
-  pinMode(encoderPinA, INPUT_PULLUP);
-  pinMode(encoderPinB, INPUT_PULLUP);
-
-  // 割り込み設定
-  attachInterrupt(digitalPinToInterrupt(encoderPinA), encoderISR, CHANGE);
-
-  Serial.println("Setup complete. Ready to receive commands.");
 }
 
 void loop() {
-  int packetSize = udp.parsePacket(); // 受信したパケットのサイズ
-  if (packetSize) {
-    char packetBuffer[255]; // 受信データのバッファ
-    int len = udp.read(packetBuffer, sizeof(packetBuffer) - 1); // パケットを読み込む
-    if (len > 0) {
-      packetBuffer[len] = '\0'; // 文字列終端
-      receivedNumber = atoi(packetBuffer); // 数値に変換
-      Serial.printf("Received Number: %4d at Time: %lu ms\n", receivedNumber, millis());
+
+  // UDPパケットの受信処理
+  int packetSize = udp.parsePacket(); // 受信したパケットのサイズを取得
+  if (packetSize) {  // パケットが受信された場合のみ処理を実行
+      char packetBuffer[255];  // 受信データを保持するバッファ
+      udp.read(packetBuffer, packetSize); // パケットを読み込む
+      packetBuffer[packetSize] = '\0';  // 文字列の終端を追加
+      receivedNumber = atoi(packetBuffer); // 受信データを整数値に変換
+      Serial.printf("Received Number: %4d at Time: %lu ms\n", receivedNumber, millis());  // 受信した時刻を表示
       handleCommand(receivedNumber); // コマンド処理
-    }
   }
 
   // エンコーダ情報を表示
-  Serial.printf("Encoder Count: %d / IP Address: %s\n", encoderCount, WiFi.localIP().toString().c_str());
+  rpm = motorSpeed (encoderCount);
+  Serial.printf("RPM: %d / IP Address: %s\n", rpm, WiFi.localIP().toString().c_str());
   delay(500);
 }
 
@@ -87,13 +112,6 @@ void motorStop() {
   Serial.println("Motor stopped");
 }
 
-// エンコーダ割り込みハンドラ
-void encoderISR() {
-  int stateA = digitalRead(encoderPinA);
-  int stateB = digitalRead(encoderPinB);
-  encoderCount += (stateA == stateB) ? 1 : -1;
-}
-
 // 受信コマンド処理
 void handleCommand(int receivedNumber) {
   if (receivedNumber > 255 || receivedNumber < -255) {
@@ -110,4 +128,14 @@ void handleCommand(int receivedNumber) {
   } else {
     motorStop();
   }
+}
+
+//エンコーダカウント処理
+void motorSpeed (encoderCount) {
+  unsigned long currentTime = millis();
+  if (currentTime - prevTime >= 1000) { // 1秒ごとに回転数を計算
+    rpm = (encoderCount / 360) * 60.0; // 1秒ごとにRPMを計算
+    encoderCount = 0;
+    prevTime = currentTime;
+  return rpm; 
 }
