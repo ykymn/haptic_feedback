@@ -5,25 +5,25 @@
 const char* ssid = "Living-Lab_2.4";
 const char* password = "livinglab";
 const int localPort = 8888; // UDPサーバーがリッスンするポート番号
-WiFiUDP udp;               // UDP通信を扱うオブジェクト
+WiFiUDP udp;
 
 // モータードライバピン
-const int motorPinA = 4;    // ドライバの入力Aピン（PWM）
-const int motorPinB = 3;    // ドライバの入力Bピン（PWM）
-const int encoderPinA = 2;  // エンコーダピンA
-const int encoderPinB = 1;  // エンコーダピンB
+const uint8_t motorPinA = 4; // ドライバの入力Aピン
+const uint8_t motorPinB = 3; // ドライバの入力Bピン
+const uint8_t encoderPinA = 2; // エンコーダピンA
+const uint8_t encoderPinB = 1; // エンコーダピンB
 
 volatile int encoderCount = 0;      // エンコーダカウント
 unsigned long prevTime = 0;         // 前回の時間
 float rpm = 0.0;                    // 回転数
-const int pulsesPerRevolution = 20; // エンコーダの1回転あたりのパルス数に合わせて調整
-int receivedNumber = 0;             // 受信データの初期値
+const int pulsesPerRevolution = 20; // エンコーダの1回転あたりのパルス数
+int receivedNumber = 0;             // 受信データ
 
 // PWM設定
-const int pwmChannelA = 0;     // チャンネル0にmotorPinAを割り当て
-const int pwmChannelB = 1;     // チャンネル1にmotorPinBを割り当て
-const int pwmFreq = 1000;      // PWM周波数
-const int pwmResolution = 8;   // PWM解像度（0～255の範囲）
+const uint8_t pwmResolution = 8; // PWM解像度（0～255）
+const uint16_t pwmFrequency = 2000; // PWM周波数
+const uint8_t pwmChannelA = 0; // チャンネル0にmotorPinAを割り当て
+const uint8_t pwmChannelB = 1; // チャンネル1にmotorPinBを割り当て
 
 // 割り込みハンドラ
 void IRAM_ATTR encoderISR() {
@@ -36,23 +36,21 @@ void IRAM_ATTR encoderISR() {
 }
 
 void setup() {
+  // シリアル通信
+  Serial.begin(115200);
+
   // モーターピンの設定
   pinMode(motorPinA, OUTPUT);
   pinMode(motorPinB, OUTPUT);
   pinMode(encoderPinA, INPUT_PULLUP);
   pinMode(encoderPinB, INPUT_PULLUP);
 
-  // PWM設定
-  ledcSetup(pwmChannelA, pwmFreq, pwmResolution);
-  ledcAttachPin(motorPinA, pwmChannelA);
-  ledcSetup(pwmChannelB, pwmFreq, pwmResolution);
-  ledcAttachPin(motorPinB, pwmChannelB);
+  // PWMの初期化
+  ledcAttachChannel(motorPinA, pwmFrequency, pwmResolution, pwmChannelA);
+  ledcAttachChannel(motorPinB, pwmFrequency, pwmResolution, pwmChannelB);
 
-  // エンコーダの割り込み設定
+  // エンコーダ割り込み設定
   attachInterrupt(digitalPinToInterrupt(encoderPinA), encoderISR, CHANGE);
-
-  Serial.begin(115200);
-  delay(1000);
 
   // Wi-Fi接続
   Serial.println("Connecting to Wi-Fi...");
@@ -65,38 +63,42 @@ void setup() {
   Serial.print("IP Address: ");
   Serial.println(WiFi.localIP());
 
-  // UDPサーバー開始
+  // UDPサーバーの初期化
   udp.begin(localPort);
   Serial.println("UDP Server started");
 }
 
 void loop() {
   // UDPパケットの受信処理
-  int packetSize = udp.parsePacket(); // 受信したパケットのサイズを取得
-  if (packetSize) {  // パケットが受信された場合のみ処理を実行
-      char packetBuffer[255];  // 受信データを保持するバッファ
-      udp.read(packetBuffer, packetSize); // パケットを読み込む
-      packetBuffer[packetSize] = '\0';  // 文字列の終端を追加
-      receivedNumber = atoi(packetBuffer); // 受信データを整数値に変換
-      Serial.printf("Received Number: %4d at Time: %lu ms\n", receivedNumber, millis());  // 受信した時刻を表示
-      handleCommand(receivedNumber); // コマンド処理
+  int packetSize = udp.parsePacket();
+  if (packetSize) {
+    char packetBuffer[255];
+    udp.read(packetBuffer, packetSize);
+    packetBuffer[packetSize] = '\0';
+    receivedNumber = atoi(packetBuffer);
+    Serial.printf("Received Number: %d\n", receivedNumber);
+    handleCommand(receivedNumber);
   }
 
   // エンコーダ情報を表示
-  rpm = calculateRPM();
-  Serial.printf("RPM: %.2f / IP Address: %s\n", rpm, WiFi.localIP().toString().c_str());
-  delay(500);
+  unsigned long currentTime = millis();
+  if (currentTime - prevTime >= 1000) {
+    rpm = (encoderCount * 60.0) / pulsesPerRevolution;
+    encoderCount = 0;
+    prevTime = currentTime;
+    Serial.printf("RPM: %.2f\n", rpm);
+  }
 }
 
 // モーター制御関数
 void motorForward(int pwmValue) {
-  pwmValue = constrain(pwmValue, 0, 255); // PWM値を制限
+  pwmValue = constrain(pwmValue, 0, 255);
   ledcWrite(pwmChannelA, pwmValue);
   ledcWrite(pwmChannelB, 0);
 }
 
 void motorBackward(int pwmValue) {
-  pwmValue = constrain(pwmValue, 0, 255); // PWM値を制限
+  pwmValue = constrain(pwmValue, 0, 255);
   ledcWrite(pwmChannelA, 0);
   ledcWrite(pwmChannelB, pwmValue);
 }
@@ -123,16 +125,4 @@ void handleCommand(int receivedNumber) {
   } else {
     motorStop();
   }
-}
-
-// 回転数計算
-float calculateRPM() {
-  unsigned long currentTime = millis();
-  float calculatedRPM = 0.0;
-  if (currentTime - prevTime >= 1000) { // 1秒ごとに回転数を計算
-    calculatedRPM = (encoderCount / (float)pulsesPerRevolution) * 60.0;
-    encoderCount = 0;
-    prevTime = currentTime;
-  }
-  return calculatedRPM;
 }
