@@ -77,8 +77,6 @@ void loop() {
     packetBuffer[packetSize] = '\0';
     receivedNumber = atoi(packetBuffer);
     Serial.printf("Received Number: %d\n", receivedNumber);
-    Serial.print("IP Address: ");
-    Serial.println(WiFi.localIP());
     handleCommand(receivedNumber);
   }
 
@@ -88,7 +86,10 @@ void loop() {
     rpm = (encoderCount * 60.0) / pulsesPerRevolution;
     encoderCount = 0;
     prevTime = currentTime;
-    Serial.printf("RPM: %.2f\n", rpm);
+    Serial.print("RPM: ");
+    Serial.print(rpm);
+    Serial.print(" / IP Address: ");
+    Serial.println(WiFi.localIP());
   }
 }
 
