@@ -1,4 +1,12 @@
 #include <Arduino.h>
+#include <WiFi.h>
+#include <WiFiUdp.h>
+
+// Wi-Fi情報
+const char* ssid = "Living-Lab_2.4";
+const char* password = "livinglab";
+const int localPort = 8888; // UDPサーバーがリッスンするポート番号
+WiFiUDP udp;
 
 // モータードライバピン
 const int motorPinA = 4;   // ドライバの入力Aピン（PWM）
@@ -6,25 +14,30 @@ const int motorPinB = 3;   // ドライバの入力Bピン（PWM）
 const int encoderPinA = 2; // エンコーダピンA
 const int encoderPinB = 1; // エンコーダピンB
 
-// エンコーダパラメータ
-const int ENCODER_RESOLUTION = 360;  // エンコーダの1回転のパルス数
-
 // エンコーダカウント
 volatile long encoderCount = 0;   // エンコーダのカウント
 unsigned long prevTime = 0;       // 前回の時間
 float rpm = 0.0;                  // 回転数
 int currentSpeed = 0;             // 現在の速度
+const int ENCODER_RESOLUTION = 3;  // エンコーダの1回転のパルス数
+int receivedNumber = 0;             // 受信データ
 
 //割り込みハンドラ
-void IRAM_ATTR encoderISR() {
+// void IRAM_ATTR encoderISR() {
+//   int stateA = digitalRead(encoderPinA);
+//   int stateB = digitalRead(encoderPinB);
+  
+//   if (stateA == stateB) {
+//     encoderCount++;
+//   } else {
+//     encoderCount--;
+//   }
+// }
+// エンコーダ割り込みハンドラ
+void encoderISR() {
   int stateA = digitalRead(encoderPinA);
   int stateB = digitalRead(encoderPinB);
-  
-  if (stateA == stateB) {
-    encoderCount++;
-  } else {
-    encoderCount--;
-  }
+  encoderCount += (stateA == stateB) ? 1 : -1;
 }
 
 void setup() {
@@ -46,18 +59,56 @@ void setup() {
   attachInterrupt(digitalPinToInterrupt(encoderPinA), encoderISR, CHANGE);
   attachInterrupt(digitalPinToInterrupt(encoderPinB), encoderISR, CHANGE);
 
+    // Wi-Fi接続
+  Serial.println("Connecting to Wi-Fi...");
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(1000);
+    Serial.print(".");
+  }
+  Serial.println("\nConnected to Wi-Fi!");
+  Serial.print("IP Address: ");
+  Serial.println(WiFi.localIP());
+
+  // UDPサーバーの初期化
+  udp.begin(localPort);
+  Serial.println("UDP Server started");
+
   Serial.println("Setup complete. Ready to receive commands.");
 }
 
 void loop() {
   // シリアルモニタからのコマンド入力を処理
-  if (Serial.available()) {
-    String command = Serial.readStringUntil('\n');
-    handleCommand(command);
+  // if (Serial.available()) {
+  //   String command = Serial.readStringUntil('\n');
+  //   handleCommand(command);
+  // }
+
+  // UDPパケットの受信処理
+  int packetSize = udp.parsePacket();
+  if (packetSize) {
+    char packetBuffer[255];
+    udp.read(packetBuffer, packetSize);
+    packetBuffer[packetSize] = '\0';
+    receivedNumber = atoi(packetBuffer);
+    Serial.printf("Received Number: %d\n", receivedNumber);
+    handleCommand(receivedNumber);
+  }
+
+  // エンコーダ情報を表示
+  unsigned long currentTime = millis();
+  if (currentTime - prevTime >= 1000) {
+    rpm = (encoderCount * 60.0) / pulsesPerRevolution;
+    encoderCount = 0;
+    prevTime = currentTime;
+    Serial.print("RPM: ");
+    Serial.print(rpm);
+    Serial.print(" / IP Address: ");
+    Serial.println(WiFi.localIP());
   }
 
   // RPM計算
-  calculateRPM();
+  // calculateRPM();
 }
 
 void calculateRPM() {
