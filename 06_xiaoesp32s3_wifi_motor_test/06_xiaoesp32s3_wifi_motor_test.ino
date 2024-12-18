@@ -6,16 +6,21 @@ const int motorPinB = 3;   // ドライバの入力Bピン（PWM）
 const int encoderPinA = 2; // エンコーダピンA
 const int encoderPinB = 1; // エンコーダピンB
 
+// エンコーダパラメータ
+const int ENCODER_RESOLUTION = 360;  // エンコーダの1回転のパルス数
+
 // エンコーダカウント
 volatile long encoderCount = 0;   // エンコーダのカウント
 unsigned long prevTime = 0;       // 前回の時間
 float rpm = 0.0;                  // 回転数
-// volatile int lastEncoderState = 0;
+int currentSpeed = 0;             // 現在の速度
 
 //割り込みハンドラ
 void IRAM_ATTR encoderISR() {
-  int state = digitalRead(encoderPinA);
-  if (digitalRead(encoderPinB) == state) {
+  int stateA = digitalRead(encoderPinA);
+  int stateB = digitalRead(encoderPinB);
+  
+  if (stateA == stateB) {
     encoderCount++;
   } else {
     encoderCount--;
@@ -30,15 +35,16 @@ void setup() {
   }
 
   // モーターピンを初期化
-  ledcAttach(motorPinA, 500, 8);  // 5kHz, 8ビット解像度
-  ledcAttach(motorPinB, 500, 8);  // 5kHz, 8ビット解像度
+  ledcAttach(motorPinA, 500, 8);  // 500Hz, 8ビット解像度
+  ledcAttach(motorPinB, 500, 8);  // 500Hz, 8ビット解像度
 
   // エンコーダピンを初期化
   pinMode(encoderPinA, INPUT_PULLUP);
   pinMode(encoderPinB, INPUT_PULLUP);
 
-  // 割り込みを設定
+  // 割り込みを設定（両方のピンで割り込み）
   attachInterrupt(digitalPinToInterrupt(encoderPinA), encoderISR, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(encoderPinB), encoderISR, CHANGE);
 
   Serial.println("Setup complete. Ready to receive commands.");
 }
@@ -50,41 +56,47 @@ void loop() {
     handleCommand(command);
   }
 
-  rpmCalculate(encoderCount);
-  // エンコーダのカウントを定期的に表示
-  // static unsigned long lastPrintTime = 0;
-  // if (millis() - lastPrintTime >= 500) {
-  //   Serial.print("Encoder Count: ");
-  //   Serial.println(encoderCount);
-  //   lastPrintTime = millis();
-  // }
+  // RPM計算
+  calculateRPM();
 }
 
-void rpmCalculate(encoderCount) {
+void calculateRPM() {
   unsigned long currentTime = millis();
-  if (currentTime - prevTime >= 1000) { // 1秒ごとに回転数を計算
-    rpm = (encoderCount / 360) * 60.0; // 1秒ごとにRPMを計算
-    encoderCount = 0;
-    prevTime = currentTime;
-
-    Serial.print("RPM: ");
+  
+  // 1秒ごとにRPMを計算
+  if (currentTime - prevTime >= 1000) {
+    // エンコーダのパルス数からRPMを計算
+    // エンコーダ1回転あたりのパルス数で割る
+    rpm = abs((encoderCount / (float)ENCODER_RESOLUTION) * 60.0);
+    
+    // シリアル出力
+    Serial.print("Encoder Count: ");
+    Serial.print(encoderCount);
+    Serial.print(" | RPM: ");
     Serial.print(rpm);
     Serial.print(" | Speed: ");
-    Serial.println(speed);
+    Serial.println(currentSpeed);
+
+    // カウンタをリセット
+    encoderCount = 0;
+    prevTime = currentTime;
   }
 }
 
 void motorForward(int pwmValue) {
+  currentSpeed = pwmValue;
   ledcWrite(motorPinA, pwmValue);   // モーターA
   ledcWrite(motorPinB, 0);          // モーターB
 }
 
 void motorBackward(int pwmValue) {
+  currentSpeed = -pwmValue;
   ledcWrite(motorPinA, 0);          // モーターA
   ledcWrite(motorPinB, pwmValue);   // モーターB
 }
 
 void motorStop() {
+  currentSpeed = 0;
   ledcWrite(motorPinA, 0);
   ledcWrite(motorPinB, 0);
   Serial.println("Motor stopped");
