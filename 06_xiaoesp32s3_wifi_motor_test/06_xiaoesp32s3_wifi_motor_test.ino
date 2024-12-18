@@ -7,23 +7,19 @@ const int encoderPinA = 2; // エンコーダピンA
 const int encoderPinB = 1; // エンコーダピンB
 
 // エンコーダカウント
-volatile long encoderCount = 0;
-volatile int lastEncoderState = 0;
+volatile long encoderCount = 0;   // エンコーダのカウント
+unsigned long prevTime = 0;       // 前回の時間
+float rpm = 0.0;                  // 回転数
+// volatile int lastEncoderState = 0;
 
+//割り込みハンドラ
 void IRAM_ATTR encoderISR() {
-  int stateA = digitalRead(encoderPinA);
-  int stateB = digitalRead(encoderPinB);
-  
-  int currentState = (stateA << 1) | stateB;
-  int diff = (currentState - lastEncoderState + 4) % 4;
-  
-  if (diff == 1) {
-    encoderCount++;  // 順方向
-  } else if (diff == 3) {
-    encoderCount--;  // 逆方向
+  int state = digitalRead(encoderPinA);
+  if (digitalRead(encoderPinB) == state) {
+    encoderCount++;
+  } else {
+    encoderCount--;
   }
-  
-  lastEncoderState = currentState;
 }
 
 void setup() {
@@ -41,9 +37,8 @@ void setup() {
   pinMode(encoderPinA, INPUT_PULLUP);
   pinMode(encoderPinB, INPUT_PULLUP);
 
-  // 割り込みを設定（両エッジで割り込み）
+  // 割り込みを設定
   attachInterrupt(digitalPinToInterrupt(encoderPinA), encoderISR, CHANGE);
-  attachInterrupt(digitalPinToInterrupt(encoderPinB), encoderISR, CHANGE);
 
   Serial.println("Setup complete. Ready to receive commands.");
 }
@@ -55,12 +50,27 @@ void loop() {
     handleCommand(command);
   }
 
+  rpmCalculate(encoderCount);
   // エンコーダのカウントを定期的に表示
-  static unsigned long lastPrintTime = 0;
-  if (millis() - lastPrintTime >= 500) {
-    Serial.print("Encoder Count: ");
-    Serial.println(encoderCount);
-    lastPrintTime = millis();
+  // static unsigned long lastPrintTime = 0;
+  // if (millis() - lastPrintTime >= 500) {
+  //   Serial.print("Encoder Count: ");
+  //   Serial.println(encoderCount);
+  //   lastPrintTime = millis();
+  // }
+}
+
+void rpmCalculate(encoderCount) {
+  unsigned long currentTime = millis();
+  if (currentTime - prevTime >= 1000) { // 1秒ごとに回転数を計算
+    rpm = (encoderCount / 360) * 60.0; // 1秒ごとにRPMを計算
+    encoderCount = 0;
+    prevTime = currentTime;
+
+    Serial.print("RPM: ");
+    Serial.print(rpm);
+    Serial.print(" | Speed: ");
+    Serial.println(speed);
   }
 }
 
