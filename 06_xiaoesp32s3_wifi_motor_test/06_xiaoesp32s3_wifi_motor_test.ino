@@ -14,27 +14,18 @@ const int motorPinB = 3;   // ドライバの入力Bピン（PWM）
 const int encoderPinA = 2; // エンコーダピンA
 const int encoderPinB = 1; // エンコーダピンB
 
+// エンコーダパラメータ
+const int PULSES_PER_REVOLUTION = 3;  // エンコーダの1回転のパルス数
+
 // エンコーダカウント
 volatile long encoderCount = 0;   // エンコーダのカウント
 unsigned long prevTime = 0;       // 前回の時間
 float rpm = 0.0;                  // 回転数
 int currentSpeed = 0;             // 現在の速度
-const int ENCODER_RESOLUTION = 3;  // エンコーダの1回転のパルス数
-int receivedNumber = 0;             // 受信データ
+int receivedNumber = 0;           // 受信データ
 
-//割り込みハンドラ
-// void IRAM_ATTR encoderISR() {
-//   int stateA = digitalRead(encoderPinA);
-//   int stateB = digitalRead(encoderPinB);
-  
-//   if (stateA == stateB) {
-//     encoderCount++;
-//   } else {
-//     encoderCount--;
-//   }
-// }
 // エンコーダ割り込みハンドラ
-void encoderISR() {
+void IRAM_ATTR encoderISR() {
   int stateA = digitalRead(encoderPinA);
   int stateB = digitalRead(encoderPinB);
   encoderCount += (stateA == stateB) ? 1 : -1;
@@ -59,7 +50,7 @@ void setup() {
   attachInterrupt(digitalPinToInterrupt(encoderPinA), encoderISR, CHANGE);
   attachInterrupt(digitalPinToInterrupt(encoderPinB), encoderISR, CHANGE);
 
-    // Wi-Fi接続
+  // Wi-Fi接続
   Serial.println("Connecting to Wi-Fi...");
   WiFi.begin(ssid, password);
   while (WiFi.status() != WL_CONNECTED) {
@@ -78,12 +69,6 @@ void setup() {
 }
 
 void loop() {
-  // シリアルモニタからのコマンド入力を処理
-  // if (Serial.available()) {
-  //   String command = Serial.readStringUntil('\n');
-  //   handleCommand(command);
-  // }
-
   // UDPパケットの受信処理
   int packetSize = udp.parsePacket();
   if (packetSize) {
@@ -91,42 +76,23 @@ void loop() {
     udp.read(packetBuffer, packetSize);
     packetBuffer[packetSize] = '\0';
     receivedNumber = atoi(packetBuffer);
-    Serial.printf("Received Number: %d\n", receivedNumber);
+    
+    // モータ制御関数の呼び出し
     handleCommand(receivedNumber);
   }
 
-  // エンコーダ情報を表示
+  // エンコーダ情報を1秒ごとに計算・表示
   unsigned long currentTime = millis();
   if (currentTime - prevTime >= 1000) {
-    rpm = (encoderCount * 60.0) / pulsesPerRevolution;
-    encoderCount = 0;
-    prevTime = currentTime;
-    Serial.print("RPM: ");
-    Serial.print(rpm);
-    Serial.print(" / IP Address: ");
-    Serial.println(WiFi.localIP());
-  }
-
-  // RPM計算
-  // calculateRPM();
-}
-
-void calculateRPM() {
-  unsigned long currentTime = millis();
-  
-  // 1秒ごとにRPMを計算
-  if (currentTime - prevTime >= 1000) {
-    // エンコーダのパルス数からRPMを計算
-    // エンコーダ1回転あたりのパルス数で割る
-    rpm = abs((encoderCount / (float)ENCODER_RESOLUTION) * 60.0);
+    // RPMの計算（回転方向を考慮）
+    rpm = (encoderCount * 60.0) / PULSES_PER_REVOLUTION;
     
-    // シリアル出力
-    Serial.print("Encoder Count: ");
-    Serial.print(encoderCount);
-    Serial.print(" | RPM: ");
-    Serial.print(rpm);
-    Serial.print(" | Speed: ");
-    Serial.println(currentSpeed);
+    // シリアルモニタに情報を出力
+    Serial.printf("%d, %.2f, %s\n", 
+      receivedNumber,  // 受信した数値
+      rpm,             // RPM（回転方向を反映）
+      WiFi.localIP().toString().c_str()  // IPアドレス
+    );
 
     // カウンタをリセット
     encoderCount = 0;
@@ -150,19 +116,9 @@ void motorStop() {
   currentSpeed = 0;
   ledcWrite(motorPinA, 0);
   ledcWrite(motorPinB, 0);
-  Serial.println("Motor stopped");
 }
 
-void handleCommand(String command) {
-  command.trim();  // 余計な空白を削除
-
-  if (command.length() == 0) {
-    Serial.println("Invalid command. Use format: speed (-255 to 255)");
-    return;
-  }
-
-  int speed = command.toInt();
-  
+void handleCommand(int speed) {
   if (abs(speed) > 255) {
     Serial.println("Speed must be between -255 and 255.");
     return;
@@ -170,10 +126,8 @@ void handleCommand(String command) {
 
   if (speed > 0) {
     motorForward(speed);
-    Serial.println("Moving Forward at speed: " + String(speed));
   } else if (speed < 0) {
     motorBackward(abs(speed));
-    Serial.println("Moving Backward at speed: " + String(abs(speed)));
   } else {
     motorStop();
   }
