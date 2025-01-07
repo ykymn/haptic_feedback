@@ -5,14 +5,14 @@
 // Wi-Fi情報
 const char* ssid = "Living-Lab_2.4";
 const char* password = "livinglab";
-const int localPort = 8888;  // UDPサーバーがリッスンするポート番号
+const int localPort = 8888;
 WiFiUDP udp;
 
 // モータードライバピン
-const int motorPinA = 4;    // ドライバの入力Aピン（PWM）
-const int motorPinB = 3;    // ドライバの入力Bピン（PWM）
-const int encoderPinA = 2;  // エンコーダピンA
-const int encoderPinB = 1;  // エンコーダピンB
+const int motorPinA = 4;
+const int motorPinB = 3;
+const int encoderPinA = 2;
+const int encoderPinB = 1;
 
 // PWMチャンネル定義
 #define PWM_CHANNEL_A 0
@@ -24,24 +24,35 @@ const int encoderPinB = 1;  // エンコーダピンB
 const int PULSES_PER_REVOLUTION = 3;  // エンコーダの1回転のパルス数
 
 // グローバル変数
-volatile long encoderCount = 0;   // エンコーダのカウント
-unsigned long prevTime = 0;       // 前回の時間
-float rpm = 0.0;                  // 回転数
-int currentSpeed = 0;             // 現在の速度
-int receivedNumber = 0;           // 受信データ
+volatile long encoderCount = 0;
+volatile int lastEncoded = 0;
+volatile long lastencoderValue = 0;
+unsigned long prevTime = 0;
+float rpm = 0.0;
+int currentSpeed = 0;
+int receivedNumber = 0;
 
-// エンコーダ割り込みハンドラ
-void IRAM_ATTR encoderISR() {
-    int stateA = digitalRead(encoderPinA);
-    int stateB = digitalRead(encoderPinB);
-    encoderCount += (stateA == stateB) ? 1 : -1;
+// エンコーダの状態を更新する関数
+void IRAM_ATTR updateEncoder() {
+    int MSB = digitalRead(encoderPinA);    // MSB = most significant bit
+    int LSB = digitalRead(encoderPinB);    // LSB = least significant bit
+
+    int encoded = (MSB << 1) | LSB;        // 2進数に変換
+    int sum = (lastEncoded << 2) | encoded;
+
+    if(sum == 0b1101 || sum == 0b0100 || sum == 0b0010 || sum == 0b1011) {
+        encoderCount++;
+    } else if(sum == 0b1110 || sum == 0b0111 || sum == 0b0001 || sum == 0b1000) {
+        encoderCount--;
+    }
+
+    lastEncoded = encoded;
 }
 
 void setup() {
-    // シリアル通信を初期化
     Serial.begin(115200);
     while (!Serial) {
-        ;  // シリアルポートが開くのを待つ
+        ;
     }
 
     // PWMチャンネルの設定
@@ -54,9 +65,12 @@ void setup() {
     pinMode(encoderPinA, INPUT_PULLUP);
     pinMode(encoderPinB, INPUT_PULLUP);
 
-    // 割り込みを設定（両方のピンで割り込み）
-    attachInterrupt(digitalPinToInterrupt(encoderPinA), encoderISR, CHANGE);
-    attachInterrupt(digitalPinToInterrupt(encoderPinB), encoderISR, CHANGE);
+    // エンコーダの初期状態を読み取り
+    lastEncoded = (digitalRead(encoderPinA) << 1) | digitalRead(encoderPinB);
+
+    // 割り込みを設定（エンコーダピンAのみに設定）
+    attachInterrupt(digitalPinToInterrupt(encoderPinA), updateEncoder, CHANGE);
+    attachInterrupt(digitalPinToInterrupt(encoderPinB), updateEncoder, CHANGE);
 
     // Wi-Fi接続
     Serial.println("Connecting to Wi-Fi...");
@@ -69,15 +83,12 @@ void setup() {
     Serial.print("IP Address: ");
     Serial.println(WiFi.localIP());
 
-    // UDPサーバーの初期化
     udp.begin(localPort);
     Serial.printf("UDP Server started on port %d\n", localPort);
-
     Serial.println("Setup complete. Ready to receive commands.");
 }
 
 void loop() {
-    // UDPパケットの受信処理
     int packetSize = udp.parsePacket();
     if (packetSize) {
         char packetBuffer[255];
@@ -91,26 +102,27 @@ void loop() {
         // Serial.printf("Contents: %s\n", packetBuffer);
         
         receivedNumber = atoi(packetBuffer);
-        Serial.printf("Parsed number: %d\n", receivedNumber);
+        // Serial.printf("Parsed number: %d\n", receivedNumber);
         
         handleCommand(receivedNumber);
     }
 
-    // エンコーダ情報を1秒ごとに計算・表示
+    // RPMの計算（1秒ごと）
     unsigned long currentTime = millis();
     if (currentTime - prevTime >= 1000) {
-        // RPMの計算（回転方向を考慮）
-        rpm = (encoderCount * 60.0) / PULSES_PER_REVOLUTION;
+        // エンコーダカウントからRPMを計算
+        // エンコーダが4逓倍なので、実際のパルス数は4で割る
+        long encoderDelta = encoderCount;
+        rpm = (encoderDelta * 60.0) / (PULSES_PER_REVOLUTION * 4.0);
         
-        // シリアルモニタに情報を出力
-        Serial.printf("Speed: %d, RPM: %.2f, IP: %s\n", 
-            receivedNumber,     // 受信した数値
-            rpm,               // RPM（回転方向を反映）
-            WiFi.localIP().toString().c_str()  // IPアドレス
+        Serial.printf("Speed: %d, EncoderCount: %ld, RPM: %.2f, IP: %s\n", 
+            receivedNumber,
+            encoderDelta,
+            rpm,
+            WiFi.localIP().toString().c_str()
         );
 
-        // カウンタをリセット
-        encoderCount = 0;
+        encoderCount = 0;  // カウンタをリセット
         prevTime = currentTime;
     }
 }
