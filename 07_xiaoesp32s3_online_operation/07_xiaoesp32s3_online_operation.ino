@@ -32,43 +32,66 @@ int receivedNumber = 0;
 
 // エンコーダの状態を更新する関数
 void IRAM_ATTR updateEncoder() {
-    int MSB = digitalRead(encoderPinA);    // MSB = most significant bit
-    int LSB = digitalRead(encoderPinB);    // LSB = least significant bit
+  int MSB = digitalRead(encoderPinA);    // MSB = most significant bit
+  int LSB = digitalRead(encoderPinB);    // LSB = least significant bit
 
-    int encoded = (MSB << 1) | LSB;        // 2進数に変換
-    int sum = (lastEncoded << 2) | encoded;
+  int encoded = (MSB << 1) | LSB;        // 2進数に変換
+  int sum = (lastEncoded << 2) | encoded;
 
-    if (sum == 0b1101 || sum == 0b0100 || sum == 0b0010 || sum == 0b1011) {
-        encoderCount++;
-    } else if (sum == 0b1110 || sum == 0b0111 || sum == 0b0001 || sum == 0b1000) {
-        encoderCount--;
-    }
+  if (sum == 0b1101 || sum == 0b0100 || sum == 0b0010 || sum == 0b1011) {
+    encoderCount++;
+  } else if (sum == 0b1110 || sum == 0b0111 || sum == 0b0001 || sum == 0b1000) {
+    encoderCount--;
+  }
 
-    lastEncoded = encoded;
+  lastEncoded = encoded;
 }
 
 void setup() {
-    // PWMチャンネルの設定
-    ledcSetup(PWM_CHANNEL_A, PWM_FREQ, PWM_RESOLUTION);
-    ledcSetup(PWM_CHANNEL_B, PWM_FREQ, PWM_RESOLUTION);
-    ledcAttachPin(motorPinA, PWM_CHANNEL_A);
-    ledcAttachPin(motorPinB, PWM_CHANNEL_B);
+  Serial.begin(115200);
 
-    // エンコーダピンを初期化
-    pinMode(encoderPinA, INPUT_PULLUP);
-    pinMode(encoderPinB, INPUT_PULLUP);
+  // PWMチャンネルの設定
+  ledcSetup(PWM_CHANNEL_A, PWM_FREQ, PWM_RESOLUTION);
+  ledcSetup(PWM_CHANNEL_B, PWM_FREQ, PWM_RESOLUTION);
+  ledcAttachPin(motorPinA, PWM_CHANNEL_A);
+  ledcAttachPin(motorPinB, PWM_CHANNEL_B);
 
-    // 割り込みを設定（エンコーダピンAとBに設定）
-    attachInterrupt(digitalPinToInterrupt(encoderPinA), updateEncoder, CHANGE);
-    attachInterrupt(digitalPinToInterrupt(encoderPinB), updateEncoder, CHANGE);
+  // エンコーダピンを初期化
+  pinMode(encoderPinA, INPUT_PULLUP);
+  pinMode(encoderPinB, INPUT_PULLUP);
 
-    // Wi-Fi接続
+  // 割り込みを設定（エンコーダピンAとBに設定）
+  attachInterrupt(digitalPinToInterrupt(encoderPinA), updateEncoder, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(encoderPinB), updateEncoder, CHANGE);
+
+  Serial.begin(115200);
+  // Wi-Fi接続
+  // USBに接続されている場合、IPアドレスをシリアルモニタに表示
+  if (Serial) {
+    Serial.println("Connecting to Wi-Fi...");
     WiFi.begin(ssid, password);
     while (WiFi.status() != WL_CONNECTED) {
-        delay(1000);
+      delay(1000);
+      Serial.print(".");
     }
+    Serial.println("\nConnected to Wi-Fi!");
+    Serial.print("IP Address: ");
+    Serial.println(WiFi.localIP());
 
     udp.begin(localPort);
+    Serial.printf("UDP Server started on port %d\n", localPort);
+    Serial.println("Setup complete. Ready to receive commands.");
+  }
+  
+  // USBに接続されていない場合、Serialの処理を省略
+  else{
+    WiFi.begin(ssid, password);
+    while (WiFi.status() != WL_CONNECTED) {
+      delay(1000);
+    }
+    udp.begin(localPort);
+  }
+
 }
 
 void loop() {
