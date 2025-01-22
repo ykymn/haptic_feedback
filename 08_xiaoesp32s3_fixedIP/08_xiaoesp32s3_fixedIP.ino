@@ -1,7 +1,7 @@
 #include <WiFi.h>
 
-const char* ssid     = "xxxxxxxx";
-const char* password = "xxxxxxxx";
+const char* ssid     = "Living-Lab_2.4";
+const char* password = "livinglab";
 const IPAddress ip(192, 168, 11, 52);
 const IPAddress gateway(192, 168, 11, 1);
 const IPAddress subnet(255, 255, 255, 0);
