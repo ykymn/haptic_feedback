@@ -2,26 +2,22 @@
 
 const char* ssid     = "Living-Lab_2.4";
 const char* password = "livinglab";
-const IPAddress ip(192, 168, 11, 52);
-const IPAddress gateway(192, 168, 11, 1);
+const IPAddress ip(192, 168, 1, 201);
+const IPAddress gateway(192, 168, 1, 1);
 const IPAddress subnet(255, 255, 255, 0);
-const IPAddress dns1(192, 168, 11, 1);
+const IPAddress DNS(192, 168, 11, 1);
 
 void setup()
 {
   Serial.begin(115200);
-  delay(10);
+  delay(100);
 
   // We start by connecting to a WiFi network
 
-  Serial.println();
-  Serial.println();
   Serial.print("Connecting to ");
   Serial.println(ssid);
 
-  if (!WiFi.config(ip,gateway,subnet,dns1)){
-      Serial.println("Failed to configure!");
-  }
+  WiFi.config(ip, gateway, subnet, DNS);
   WiFi.begin(ssid, password);
 
   while (WiFi.status() != WL_CONNECTED) {
