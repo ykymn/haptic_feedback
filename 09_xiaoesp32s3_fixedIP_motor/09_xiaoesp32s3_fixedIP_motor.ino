@@ -100,14 +100,6 @@ void loop() {
     // エンコーダが4逓倍なので、実際のパルス数は4で割る
     long encoderDelta = encoderCount;
     rpm = (encoderDelta * 60.0) / (PULSES_PER_REVOLUTION * 4.0);
-    
-    Serial.printf("Speed: %d, EncoderCount: %ld, RPM: %.2f, IP: %s\n", 
-      receivedNumber,
-      encoderDelta,
-      rpm,
-      WiFi.localIP().toString().c_str()
-    );
-
     encoderCount = 0;  // カウンタをリセット
     prevTime = currentTime;
   }
@@ -134,11 +126,6 @@ void motorStop() {
 
 // モーターの正転・逆転・停止を指示
 void handleCommand(int speed) {
-  if (abs(speed) > 255) {
-    Serial.println("Speed must be between -255 and 255.");
-    return;
-  } 
-
   if (speed > 0) {
     motorForward(speed);
   } else if (speed < 0) {
