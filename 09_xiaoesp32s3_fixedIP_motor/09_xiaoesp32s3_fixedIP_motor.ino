@@ -54,9 +54,6 @@ void IRAM_ATTR updateEncoder() {
 }
 
 void setup() {
-  Serial.begin(115200);
-  delay(100);
-
   // PWMチャンネルの設定
   ledcSetup(PWM_CHANNEL_A, PWM_FREQ, PWM_RESOLUTION);
   ledcSetup(PWM_CHANNEL_B, PWM_FREQ, PWM_RESOLUTION);
