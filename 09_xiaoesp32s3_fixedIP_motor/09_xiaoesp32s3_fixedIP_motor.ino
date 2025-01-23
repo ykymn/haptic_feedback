@@ -122,7 +122,7 @@ void motorForward(int pwmValue) {
 
 void motorBackward(int pwmValue) {
   ledcWrite(PWM_CHANNEL_A, 0);
-  ledcWrite(PWM_CHANNEL_B, -pwmValue);
+  ledcWrite(PWM_CHANNEL_B, abs(pwmValue));
 }
 
 void motorStop() {
@@ -135,7 +135,7 @@ void handleCommand(int speed) {
   if (speed > 0) {
     motorForward(speed);
   } else if (speed < 0) {
-    motorBackward(speed);
+    motorBackward(abs(speed));
   } else {
     motorStop();
   }
