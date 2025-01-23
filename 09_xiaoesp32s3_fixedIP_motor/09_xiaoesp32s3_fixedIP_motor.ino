@@ -24,6 +24,10 @@ const int encoderPinB = 1;
 #define PWM_FREQ 500
 #define PWM_RESOLUTION 8
 
+// タイムアウト設定
+const unsigned long TIMEOUT_DURATION = 5000; // 5秒のタイムアウト
+unsigned long lastCommandTime = 0;
+
 // エンコーダパラメータ
 const int PULSES_PER_REVOLUTION = 3;  // エンコーダの1回転のパルス数
 
@@ -88,6 +92,14 @@ void loop() {
     packetBuffer[len] = '\0';     
     receivedNumber = atoi(packetBuffer);       
     handleCommand(receivedNumber);
+    lastCommandTime = millis(); // コマンド受信時刻を更新
+  }
+
+  // タイムアウトチェック
+  if (millis() - lastCommandTime > TIMEOUT_DURATION) {
+    if (currentSpeed != 0) { // モーターが動いている場合のみ停止
+      motorStop();
+    }
   }
 
   // RPMの計算（1秒ごと）
