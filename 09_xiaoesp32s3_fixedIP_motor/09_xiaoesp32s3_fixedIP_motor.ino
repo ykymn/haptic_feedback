@@ -104,19 +104,16 @@ void loop() {
 
 // モーターの回転方向と回転速度を指示
 void motorForward(int pwmValue) {
-  currentSpeed = pwmValue;
   ledcWrite(PWM_CHANNEL_A, pwmValue);
   ledcWrite(PWM_CHANNEL_B, 0);
 }
 
 void motorBackward(int pwmValue) {
-  currentSpeed = -pwmValue;
   ledcWrite(PWM_CHANNEL_A, 0);
-  ledcWrite(PWM_CHANNEL_B, pwmValue);
+  ledcWrite(PWM_CHANNEL_B, -pwmValue);
 }
 
 void motorStop() {
-  currentSpeed = 0;
   ledcWrite(PWM_CHANNEL_A, 0);
   ledcWrite(PWM_CHANNEL_B, 0);
 }
@@ -126,7 +123,7 @@ void handleCommand(int speed) {
   if (speed > 0) {
     motorForward(speed);
   } else if (speed < 0) {
-    motorBackward(abs(speed));
+    motorBackward(speed);
   } else {
     motorStop();
   }
