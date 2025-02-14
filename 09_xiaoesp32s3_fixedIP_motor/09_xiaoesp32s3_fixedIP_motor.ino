@@ -13,10 +13,10 @@ const IPAddress subnet(255, 255, 255, 0);
 const IPAddress DNS(192, 168, 11, 1);
 
 // モータードライバピン
-const int motorPinA = 4;
-const int motorPinB = 3;
-const int encoderPinA = 2;
-const int encoderPinB = 1;
+const int motorPinA = 1;
+const int motorPinB = 2;
+const int encoderPinA = 4;
+const int encoderPinB = 3;
 
 // PWMチャンネル定義
 #define PWM_CHANNEL_A 0
